@@ -7,6 +7,7 @@ const io = new Server(expressServer)
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import rutas from './routes/rutas.js'
+import { schema, normalize } from "normalizr";
 
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -24,13 +25,34 @@ app.use(express.static(path.join(__dirname, './public')))
 
 app.use('/api/', rutas)
 
+//NORMALIZR
+
+const author = new schema.Entity("author", {}, { idAttribute: "userEmail" });
+
+const mensaje = new schema.Entity(
+  "mensaje",
+  { author: author },
+  { idAttribute: "_id" }
+);
+
+const schemaMensajes = new schema.Entity(
+  "mensajes",
+  {
+    mensajes: [mensaje],
+  },
+  { idAttribute: "id" }
+);
 
 
 io.on('connection', async socket => {
     console.log(`Se conecto un usuario ${socket.id}`)
     try{
         mensajesEnBaseDeDatos = await mensajes.getAll()
-        socket.emit('server:mensajes', mensajesEnBaseDeDatos)
+        const normalizedMensajes = normalize(
+            { id: "mensajes", mensajes: mensajesEnBaseDeDatos },
+            schemaMensajes
+        );
+        socket.emit('server:mensajes', normalizedMensajes)
     }catch(error){
         console.log(`Error al adquirir los mensajes ${error}`)
     }
@@ -38,6 +60,11 @@ io.on('connection', async socket => {
         console.log(nuevoMensaje)
         await mensajes.save(nuevoMensaje)
         mensajesEnBaseDeDatos = await mensajes.getAll()
-        io.emit('server:mensajes', mensajesEnBaseDeDatos)
+        console.log(mensajesEnBaseDeDatos)
+        const normalizedMensajes = normalize(
+            { id: "mensajes", mensajes: mensajesEnBaseDeDatos },
+            schemaMensajes
+        );
+        io.emit('server:mensajes', normalizedMensajes)
     })
 })
